@@ -40,7 +40,7 @@ def test_health_check(client):
 
 def test_list_models(client, mock_config):
     """测试获取模型列表"""
-    response = client.get("/v1/models")
+    response = client.get("/v1/models", headers={"Authorization": "Bearer test-key"})
     assert response.status_code == 200
     data = response.json()
     assert data["object"] == "list"
@@ -48,7 +48,7 @@ def test_list_models(client, mock_config):
     assert len(data["data"]) > 0
 
 
-def test_chat_completion_unauthorized(client):
+def test_chat_completion_unauthorized(client, mock_config):
     """测试未认证的请求"""
     response = client.post(
         "/v1/chat/completions",
@@ -57,12 +57,14 @@ def test_chat_completion_unauthorized(client):
             "messages": [{"role": "user", "content": "test"}]
         }
     )
-    # 应该返回 401 或 403（取决于配置）
+    # 未带 Authorization header，应被认证拦截
     assert response.status_code in [401, 403]
 
 
 def test_chat_completion_missing_model(client, mock_config):
     """测试不存在的模型"""
+    # 模拟预设不存在
+    mock_config.get_preset.return_value = None
     response = client.post(
         "/v1/chat/completions",
         headers={"Authorization": "Bearer test-key"},
@@ -89,7 +91,7 @@ def test_chat_completion_invalid_request(client, mock_config):
 
 def test_stats_endpoint(client, mock_config):
     """测试统计端点"""
-    response = client.get("/stats")
+    response = client.get("/stats", headers={"Authorization": "Bearer test-key"})
     assert response.status_code == 200
     data = response.json()
     assert "total_requests" in data
