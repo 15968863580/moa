@@ -5,8 +5,10 @@ import time
 from contextlib import asynccontextmanager
 from typing import Dict
 
-from fastapi import FastAPI, HTTPException, Depends, Request
-from fastapi.responses import StreamingResponse, JSONResponse
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Depends, Request, Body
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from . import __version__
@@ -30,6 +32,9 @@ logger = logging.getLogger(__name__)
 
 # 全局配置管理器
 config_manager = ConfigManager()
+
+# 管理 UI 页面路径
+UI_PATH = Path(__file__).parent.parent / "static" / "admin.html"
 
 # 统计信息
 stats: Dict[str, int] = {
@@ -199,6 +204,54 @@ async def reload_config(_: None = Depends(verify_api_key)):
         return {"status": "ok", "message": "Config reloaded successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/admin/ui")
+async def admin_ui():
+    """管理控制台 UI 页面"""
+    if not UI_PATH.exists():
+        raise HTTPException(status_code=404, detail="UI file not found")
+    return FileResponse(UI_PATH)
+
+
+@app.get("/admin/config")
+async def get_config_file(_: None = Depends(verify_api_key)):
+    """获取配置文件原文"""
+    try:
+        content = config_manager.config_path.read_text(encoding='utf-8')
+        return {"content": content, "path": str(config_manager.config_path)}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Config file not found")
+
+
+@app.post("/admin/config")
+async def save_config_file(
+    content: str = Body(..., embed=True),
+    _: None = Depends(verify_api_key)
+):
+    """保存配置文件（校验 YAML 语法，不自动重载）"""
+    try:
+        config_manager.save_config(content)
+        return {"status": "ok", "message": "Config saved. Call /admin/reload to apply."}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/restart")
+async def restart_service(_: None = Depends(verify_api_key)):
+    """重启服务（需以 reload 模式或进程管理器运行才能自动恢复）"""
+    import threading
+    import os
+
+    def _do_restart():
+        time.sleep(1.5)
+        logger.info("Restarting service by admin request...")
+        os._exit(0)
+
+    threading.Thread(target=_do_restart, daemon=True).start()
+    return {"status": "restarting", "message": "Service is restarting, please wait ~5s..."}
 
 
 # ============================================================================

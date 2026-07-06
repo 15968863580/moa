@@ -113,3 +113,15 @@ class ConfigManager:
     def has_preset(self, name: str) -> bool:
         """检查预设是否存在"""
         return name in self._presets_map
+
+    def save_config(self, raw_content: str):
+        """保存配置文件原文（会先校验 YAML 语法）"""
+        # 校验 YAML 语法
+        try:
+            yaml.safe_load(raw_content)
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML syntax: {e}")
+
+        with open(self.config_path, 'w', encoding='utf-8', newline='') as f:
+            f.write(raw_content)
+        logger.info(f"Config saved to {self.config_path}")
