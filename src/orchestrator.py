@@ -48,10 +48,20 @@ class MOAOrchestrator:
         
         # 转换消息格式
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
-        
+
+        # 提取客户端传入的采样参数（None 表示未传，使用配置默认值）
+        sampling_params = {
+            "temperature": request.temperature,
+            "max_tokens": request.max_tokens,
+            "top_p": request.top_p,
+            "frequency_penalty": request.frequency_penalty,
+            "presence_penalty": request.presence_penalty,
+            "stop": request.stop,
+        }
+
         # 1. 并行调用所有 Reference 模型
         reference_tasks = [
-            self._call_reference_model(ref_config, messages, request_id, i)
+            self._call_reference_model(ref_config, messages, request_id, i, **sampling_params)
             for i, ref_config in enumerate(preset.references)
         ]
         
@@ -95,7 +105,8 @@ class MOAOrchestrator:
         aggregator_result = await model_caller.call(
             preset.aggregator,
             aggregator_messages,
-            stream=False
+            stream=False,
+            **sampling_params
         )
         
         # 累计 Aggregator 的 token 使用
@@ -145,10 +156,20 @@ class MOAOrchestrator:
         
         # 转换消息格式
         messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
-        
+
+        # 提取客户端传入的采样参数（None 表示未传，使用配置默认值）
+        sampling_params = {
+            "temperature": request.temperature,
+            "max_tokens": request.max_tokens,
+            "top_p": request.top_p,
+            "frequency_penalty": request.frequency_penalty,
+            "presence_penalty": request.presence_penalty,
+            "stop": request.stop,
+        }
+
         # 1. 并行调用所有 Reference 模型（非流式）
         reference_tasks = [
-            self._call_reference_model(ref_config, messages, request_id, i)
+            self._call_reference_model(ref_config, messages, request_id, i, **sampling_params)
             for i, ref_config in enumerate(preset.references)
         ]
         
@@ -182,7 +203,8 @@ class MOAOrchestrator:
         aggregator_stream = await model_caller.call(
             preset.aggregator,
             aggregator_messages,
-            stream=True
+            stream=True,
+            **sampling_params
         )
         
         # 5. 转换为 OpenAI 格式并流式输出
@@ -197,15 +219,17 @@ class MOAOrchestrator:
         config: ModelConfig,
         messages: List[Dict[str, str]],
         request_id: str,
-        index: int
+        index: int,
+        **sampling_params
     ) -> Dict[str, Any]:
         """调用单个 Reference 模型"""
         logger.debug(f"[{request_id}] Calling reference model {index}: {config.model}")
-        
+
         result = await model_caller.call(
             config,
             messages,
-            stream=False
+            stream=False,
+            **sampling_params
         )
         
         logger.debug(

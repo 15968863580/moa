@@ -30,25 +30,33 @@ class ModelCaller:
         config: ModelConfig,
         messages: List[Dict[str, str]],
         stream: bool = False,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        frequency_penalty: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
+        stop: Optional[List[str]] = None,
         **kwargs
     ):
         """
         调用指定模型
-        
+
         Args:
             config: 模型配置
             messages: 消息列表
             stream: 是否流式输出
+            temperature/max_tokens/top_p/frequency_penalty/presence_penalty/stop:
+                客户端传入的采样参数，非 None 时优先于 config 中的默认值
             **kwargs: 额外参数
-        
+
         Returns:
             非流式: 返回完整响应内容 (str)
             流式: 返回异步生成器
         """
         # 构造 litellm 模型标识
         model = self._build_model_id(config)
-        
-        # 构造调用参数
+
+        # 构造调用参数：默认用 config 的值
         call_params = {
             "model": model,
             "messages": messages,
@@ -56,7 +64,7 @@ class ModelCaller:
             "max_tokens": config.max_tokens,
             "stream": stream,
         }
-        
+
         # 可选参数
         if config.api_key:
             call_params["api_key"] = config.api_key
@@ -64,7 +72,21 @@ class ModelCaller:
             call_params["base_url"] = config.base_url
         if config.timeout:
             call_params["timeout"] = config.timeout
-        
+
+        # 客户端传入的采样参数优先（非 None 时覆盖默认值）
+        if temperature is not None:
+            call_params["temperature"] = temperature
+        if max_tokens is not None:
+            call_params["max_tokens"] = max_tokens
+        if top_p is not None:
+            call_params["top_p"] = top_p
+        if frequency_penalty is not None:
+            call_params["frequency_penalty"] = frequency_penalty
+        if presence_penalty is not None:
+            call_params["presence_penalty"] = presence_penalty
+        if stop is not None:
+            call_params["stop"] = stop
+
         # 合并额外参数
         call_params.update(kwargs)
         

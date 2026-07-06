@@ -1,92 +1,50 @@
-# MOA 服务配置文件
-# 详细配置说明请参考 docs/CONFIG.md
+# MOA 服务配置文件（真实测试配置）
+# Reference 模型: qwen3.7-plus + glm-5.2，经 OneAPI（OpenAI 兼容）调用
 
 server:
   host: "0.0.0.0"
   port: 8000
-  api_key: "${MOA_API_KEY}"  # 客户端访问本服务需要的 API Key
-  rate_limit: 100  # 每分钟最大请求数
+  api_key: "${MOA_API_KEY}"
+  rate_limit: 100
 
-# MOA 预设配置
-# 每个预设定义了一组 Reference 模型和 Aggregator 模型
 moa_presets:
-  # 示例 1: GPT-4 + Claude 组合
-  - name: "moa-gpt4-claude"
-    description: "GPT-4 + Claude 3 Sonnet 组合（高质量）"
-    
-    # Reference 模型（并行调用）
+  - name: "moa-test"
+    description: "qwen3.7-plus + glm-5.2 组合（OneAPI）"
+
     references:
-      - provider: "openai"
-        model: "gpt-4-turbo-preview"
-        api_key: "${OPENAI_API_KEY}"
-        base_url: "https://api.openai.com/v1"
+      - provider: "openai_compatible"
+        model: "qwen3.7-plus"
+        api_key: "${ONEAPI_API_KEY}"
+        base_url: "${ONEAPI_BASE_URL}"
         temperature: 0.7
-        max_tokens: 2000
+        max_tokens: 1000
         timeout: 60
-        
-      - provider: "anthropic"
-        model: "claude-3-sonnet-20240229"
-        api_key: "${ANTHROPIC_API_KEY}"
-        base_url: "https://api.anthropic.com"
+
+      - provider: "openai_compatible"
+        model: "glm-5.2"
+        api_key: "${ONEAPI_API_KEY}"
+        base_url: "${ONEAPI_BASE_URL}"
         temperature: 0.7
-        max_tokens: 2000
+        max_tokens: 1000
         timeout: 60
-    
-    # Aggregator 模型（汇总）
+
     aggregator:
-      provider: "openai"
-      model: "gpt-4-turbo-preview"
-      api_key: "${OPENAI_API_KEY}"
-      base_url: "https://api.openai.com/v1"
+      provider: "openai_compatible"
+      model: "qwen3.7-plus"
+      api_key: "${ONEAPI_API_KEY}"
+      base_url: "${ONEAPI_BASE_URL}"
       temperature: 0.3
-      max_tokens: 3000
+      max_tokens: 1500
       timeout: 120
-    
-    # Aggregator Prompt 模板
+
     aggregator_prompt: |
       你是一个专业的回答汇总助手。以下是多个 AI 助手对同一问题的独立回答：
-      
+
       {reference_responses}
-      
+
       请综合分析以上回答，提取最有价值的信息，生成一个更全面、准确、有用的最终回答。
       要求：
       1. 保留各回答中的正确信息
       2. 如果有冲突，选择最可靠的答案
       3. 补充遗漏的重要细节
       4. 用清晰的结构组织答案
-
-  # 示例 2: 本地模型组合（低成本）
-  - name: "moa-local-ensemble"
-    description: "本地模型组合（低成本）"
-    references:
-      - provider: "openai_compatible"
-        model: "qwen2.5-72b"
-        base_url: "${LOCAL_MODEL_BASE_URL}"
-        api_key: "ollama"
-        temperature: 0.7
-        max_tokens: 2000
-        timeout: 120
-        
-      - provider: "openai_compatible"
-        model: "llama3.1-70b"
-        base_url: "${LOCAL_MODEL_BASE_URL}"
-        api_key: "ollama"
-        temperature: 0.7
-        max_tokens: 2000
-        timeout: 120
-    
-    aggregator:
-      provider: "openai_compatible"
-      model: "qwen2.5-72b"
-      base_url: "${LOCAL_MODEL_BASE_URL}"
-      api_key: "ollama"
-      temperature: 0.3
-      max_tokens: 3000
-      timeout: 180
-    
-    aggregator_prompt: |
-      你是一个专业的回答汇总助手。以下是多个 AI 助手对同一问题的独立回答：
-      
-      {reference_responses}
-      
-      请综合分析以上回答，提取最有价值的信息，生成一个更全面、准确、有用的最终回答。

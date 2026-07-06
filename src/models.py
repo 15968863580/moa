@@ -21,12 +21,12 @@ class ChatCompletionRequest(BaseModel):
     """OpenAI Chat Completion 请求"""
     model: str
     messages: List[ChatMessage]
-    temperature: Optional[float] = 0.7
+    temperature: Optional[float] = None
     max_tokens: Optional[int] = None
     stream: Optional[bool] = False
-    top_p: Optional[float] = 1.0
-    frequency_penalty: Optional[float] = 0.0
-    presence_penalty: Optional[float] = 0.0
+    top_p: Optional[float] = None
+    frequency_penalty: Optional[float] = None
+    presence_penalty: Optional[float] = None
     stop: Optional[List[str]] = None
 
 
