@@ -1,4 +1,4 @@
-# MOA 服务部署指南
+# kaka_moa 服务部署指南
 
 ## 部署方式
 
@@ -72,7 +72,7 @@ gunicorn src.main:app \
 
 ```ini
 [Unit]
-Description=MOA Service
+Description=kaka_moa
 After=network.target
 
 [Service]

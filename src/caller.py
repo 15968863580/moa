@@ -1,4 +1,4 @@
-"""MOA 独立服务 - 统一的模型调用器"""
+"""kaka_moa - 统一的模型调用器"""
 
 import logging
 import time

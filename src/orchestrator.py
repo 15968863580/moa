@@ -1,4 +1,4 @@
-"""MOA 独立服务 - MOA 编排引擎（核心逻辑）"""
+"""kaka_moa - MOA 编排引擎（核心逻辑）"""
 
 import asyncio
 import logging

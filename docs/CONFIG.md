@@ -1,8 +1,8 @@
-# MOA 服务配置说明
+# kaka_moa 服务配置说明
 
 ## 配置文件结构
 
-MOA 服务使用 `moa-config.yaml` 作为主配置文件，支持环境变量替换。
+kaka_moa 服务使用 `moa-config.yaml` 作为主配置文件，支持环境变量替换。
 
 ### 完整配置示例
 

@@ -1,4 +1,4 @@
-"""MOA 独立服务 - FastAPI 应用入口"""
+"""kaka_moa - FastAPI 应用入口"""
 
 import logging
 import time
@@ -47,17 +47,17 @@ security = HTTPBearer(auto_error=False)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    logger.info(f"MOA Service v{__version__} starting...")
+    logger.info(f"kaka_moa v{__version__} starting...")
     logger.info(f"Loaded {len(config_manager.list_presets())} MOA presets")
     for name in config_manager.list_presets():
         preset = config_manager.get_preset(name)
         logger.info(f"  - {name}: {len(preset.references)} refs + 1 agg")
     yield
-    logger.info("MOA Service shutting down...")
+    logger.info("kaka_moa shutting down...")
 
 
 app = FastAPI(
-    title="MOA Service",
+    title="kaka_moa",
     description="Mixture of Agents - 多模型协作代理服务",
     version=__version__,
     lifespan=lifespan

@@ -1,4 +1,4 @@
-"""MOA 服务测试 - 配置管理测试"""
+"""kaka_moa 服务测试 - 配置管理测试"""
 
 import pytest
 import tempfile

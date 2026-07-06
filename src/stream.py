@@ -1,4 +1,4 @@
-"""MOA 独立服务 - 流式响应处理"""
+"""kaka_moa - 流式响应处理"""
 
 import json
 import time

@@ -1,4 +1,4 @@
-"""MOA 服务测试 - API 端点测试"""
+"""kaka_moa 服务测试 - API 端点测试"""
 
 import pytest
 from fastapi.testclient import TestClient

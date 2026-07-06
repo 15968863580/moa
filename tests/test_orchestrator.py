@@ -1,4 +1,4 @@
-"""MOA 服务测试 - 编排引擎测试"""
+"""kaka_moa 服务测试 - 编排引擎测试"""
 
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock

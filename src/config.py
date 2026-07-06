@@ -1,4 +1,4 @@
-"""MOA 独立服务 - 配置加载和管理"""
+"""kaka_moa - 配置加载和管理"""
 
 import os
 import re

@@ -1,10 +1,10 @@
-# MOA 独立服务
+# kaka_moa
 
 **Mixture of Agents** - 多模型协作代理服务，兼容 OpenAI API 格式。
 
 ## 简介
 
-MOA 服务通过并行调用多个 LLM 模型（Reference Models），然后使用一个 Aggregator 模型汇总这些回答，生成更高质量的最终响应。
+kaka_moa 服务通过并行调用多个 LLM 模型（Reference Models），然后使用一个 Aggregator 模型汇总这些回答，生成更高质量的最终响应。
 
 ### 核心特性
 
@@ -164,7 +164,7 @@ MOA_API_KEY=your-moa-service-key
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  MOA Service                         │
+│                  kaka_moa                            │
 │                                                      │
 │  ┌──────────────┐                                   │
 │  │  FastAPI     │  OpenAI 兼容 API                  │
@@ -202,7 +202,7 @@ MOA_API_KEY=your-moa-service-key
 ## 项目结构
 
 ```
-moa/
+kaka_moa/
 ├── src/
 │   ├── main.py           # FastAPI 应用入口
 │   ├── orchestrator.py   # MOA 编排引擎

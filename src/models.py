@@ -1,4 +1,4 @@
-"""MOA 独立服务 - 数据模型定义"""
+"""kaka_moa - 数据模型定义"""
 
 from typing import List, Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field
