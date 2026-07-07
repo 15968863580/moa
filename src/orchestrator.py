@@ -77,7 +77,10 @@ class MOAOrchestrator:
         
         for i, result in enumerate(reference_results):
             if isinstance(result, Exception):
-                logger.error(f"[{request_id}] Reference model {i} failed: {result}")
+                logger.error(
+                    f"[{request_id}] Reference model {i} failed: {result}",
+                    exc_info=result
+                )
                 # 降级策略：跳过失败的模型，继续处理其他成功的响应
             else:
                 successful_responses.append(result["content"])
@@ -179,7 +182,10 @@ class MOAOrchestrator:
         successful_responses = []
         for i, result in enumerate(reference_results):
             if isinstance(result, Exception):
-                logger.error(f"[{request_id}] Reference model {i} failed: {result}")
+                logger.error(
+                    f"[{request_id}] Reference model {i} failed: {result}",
+                    exc_info=result
+                )
             else:
                 successful_responses.append(result["content"])
         
@@ -223,7 +229,7 @@ class MOAOrchestrator:
         **sampling_params
     ) -> Dict[str, Any]:
         """调用单个 Reference 模型"""
-        logger.debug(f"[{request_id}] Calling reference model {index}: {config.model}")
+        logger.info(f"[{request_id}] Calling reference model {index}: {config.model}")
 
         result = await model_caller.call(
             config,
@@ -232,7 +238,7 @@ class MOAOrchestrator:
             **sampling_params
         )
         
-        logger.debug(
+        logger.info(
             f"[{request_id}] Reference model {index} completed, "
             f"tokens: {result['usage']['total_tokens']}"
         )

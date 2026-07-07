@@ -13,6 +13,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from . import __version__
 from .config import ConfigManager
+from .logging_config import setup_logging
 from .models import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -23,11 +24,8 @@ from .models import (
 )
 from .orchestrator import orchestrator
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-)
+# 配置日志：控制台 + 按天滚动文件（全量 logs/moa.log + 错误 logs/error.log）
+setup_logging()
 logger = logging.getLogger(__name__)
 
 # 全局配置管理器
@@ -124,7 +122,7 @@ async def chat_completions(
                     stats["successful_requests"] += 1
                 except Exception as e:
                     stats["failed_requests"] += 1
-                    logger.error(f"Stream error: {e}")
+                    logger.error(f"Stream error: {e}", exc_info=True)
                     raise
             
             return StreamingResponse(

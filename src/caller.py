@@ -1,5 +1,6 @@
 """kaka_moa - 统一的模型调用器"""
 
+import json
 import logging
 import time
 from typing import List, Dict, Any, Optional, AsyncIterator
@@ -89,10 +90,12 @@ class ModelCaller:
 
         # 合并额外参数
         call_params.update(kwargs)
-        
-        logger.debug(f"Calling model: {model}, stream={stream}")
+
+        # 记录调用参数（脱敏 api_key，不写入敏感信息）
+        log_params = {k: v for k, v in call_params.items() if k != 'api_key'}
+        logger.info(f"调用参数: {json.dumps(log_params, ensure_ascii=False)}")
         start_time = time.time()
-        
+
         try:
             if stream:
                 response = await litellm.acompletion(**call_params)
@@ -102,19 +105,20 @@ class ModelCaller:
             else:
                 response = await litellm.acompletion(**call_params)
                 elapsed = time.time() - start_time
-                
+
                 content = response.choices[0].message.content
                 usage = {
                     "prompt_tokens": getattr(response.usage, 'prompt_tokens', 0),
                     "completion_tokens": getattr(response.usage, 'completion_tokens', 0),
                     "total_tokens": getattr(response.usage, 'total_tokens', 0),
                 }
-                
+
                 logger.info(
                     f"Model {model} responded in {elapsed:.2f}s, "
                     f"tokens: {usage['total_tokens']}"
                 )
-                
+                logger.info(f"模型返回内容: {content}")
+
                 return {
                     "content": content,
                     "usage": usage,
@@ -124,17 +128,24 @@ class ModelCaller:
         
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(f"Model {model} failed after {elapsed:.2f}s: {e}")
+            logger.error(
+                f"Model {model} failed after {elapsed:.2f}s: {e}",
+                exc_info=True
+            )
             raise
     
     async def _handle_stream(self, response, model: str) -> AsyncIterator[str]:
         """处理流式响应"""
+        accumulated = []
         try:
             async for chunk in response:
                 if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                    content = chunk.choices[0].delta.content
+                    accumulated.append(content)
+                    yield content
+            logger.info(f"模型返回内容(流式): {''.join(accumulated)}")
         except Exception as e:
-            logger.error(f"Stream error for {model}: {e}")
+            logger.error(f"Stream error for {model}: {e}", exc_info=True)
             raise
     
     def _build_model_id(self, config: ModelConfig) -> str:

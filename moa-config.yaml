@@ -17,16 +17,16 @@ moa_presets:
         api_key: "${ONEAPI_API_KEY}"
         base_url: "${ONEAPI_BASE_URL}"
         temperature: 0.7
-        max_tokens: 1000
-        timeout: 60
+        max_tokens: 65536
+        timeout: 300
 
       - provider: "openai_compatible"
         model: "glm-5.2"
         api_key: "${ONEAPI_API_KEY}"
         base_url: "${ONEAPI_BASE_URL}"
         temperature: 0.7
-        max_tokens: 1000
-        timeout: 60
+        max_tokens: 65536
+        timeout: 300
 
     aggregator:
       provider: "openai_compatible"
@@ -34,8 +34,8 @@ moa_presets:
       api_key: "${ONEAPI_API_KEY}"
       base_url: "${ONEAPI_BASE_URL}"
       temperature: 0.3
-      max_tokens: 1500
-      timeout: 120
+      max_tokens: 65536
+      timeout: 300
 
     aggregator_prompt: |
       你是一个专业的回答汇总助手。以下是多个 AI 助手对同一问题的独立回答：
