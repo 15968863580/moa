@@ -1,0 +1,27 @@
+{
+  "type": "function",
+  "function": {
+    "name": "mcp__github__list_issues",
+    "description": "通过 MCP GitHub 服务列出指定仓库的 Issue",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "仓库 owner"
+        },
+        "repo": {
+          "type": "string",
+          "description": "仓库名称"
+        },
+        "state": {
+          "type": "string",
+          "enum": ["open", "closed", "all"],
+          "default": "open",
+          "description": "Issue 状态过滤"
+        }
+      },
+      "required": ["owner", "repo"]
+    }
+  }
+}

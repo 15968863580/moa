@@ -39,8 +39,6 @@ moa_presets:
         config_path = f.name
 
     yield config_path
-
-    # 清理
     os.unlink(config_path)
 
 
@@ -78,7 +76,6 @@ def test_has_preset(temp_config_file):
 
 def test_env_var_resolution():
     """测试环境变量解析"""
-    # 设置环境变量
     os.environ['TEST_API_KEY'] = 'resolved-key'
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False, encoding='utf-8') as f:
@@ -101,7 +98,6 @@ def test_reload_config(temp_config_file):
     """测试热重载配置"""
     config_manager = ConfigManager(temp_config_file)
 
-    # 修改配置文件
     with open(temp_config_file, 'w', encoding='utf-8') as f:
         f.write("""
 server:
@@ -111,7 +107,6 @@ server:
 moa_presets: []
 """)
 
-    # 重新加载
     config_manager.reload()
 
     assert config_manager.server_config.host == "127.0.0.1"
@@ -123,9 +118,39 @@ def test_missing_config_file():
     """测试配置文件不存在的情况"""
     config_manager = ConfigManager("/non/existent/path.yaml")
 
-    # 应该使用默认配置
     assert config_manager.server_config.host == "0.0.0.0"
     assert config_manager.server_config.port == 8000
+
+
+def test_preset_tool_dirs_are_resolved():
+    """测试 preset 的 skill_dir/mcp_dir 会被解析为绝对路径"""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        config_path = Path(temp_dir) / "moa-config.yaml"
+        (Path(temp_dir) / "tools" / "a_skills").mkdir(parents=True)
+        (Path(temp_dir) / "tools" / "a_mcps").mkdir(parents=True)
+
+        config_path.write_text(
+            """
+server:
+  api_key: "test-key"
+moa_presets:
+  - name: "preset-a"
+    skill_dir: "tools/a_skills"
+    mcp_dir: "tools/a_mcps"
+    references: []
+    aggregator:
+      provider: "openai"
+      model: "gpt-4"
+    aggregator_prompt: "汇总：{reference_responses}"
+""",
+            encoding="utf-8"
+        )
+
+        config_manager = ConfigManager(str(config_path))
+        preset = config_manager.get_preset("preset-a")
+        assert preset is not None
+        assert preset.skill_dir == str((Path(temp_dir) / "tools" / "a_skills").resolve())
+        assert preset.mcp_dir == str((Path(temp_dir) / "tools" / "a_mcps").resolve())
 
 
 if __name__ == "__main__":

@@ -43,12 +43,12 @@ pip install -r requirements.txt
 python -m src.main
 ```
 
-服务将在 `http://localhost:8000` 启动。
+服务将在 `http://localhost:7890` 启动。
 
 ### 5. 测试调用
 
 ```bash
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:7890/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-moa-api-key" \
   -d '{
@@ -78,148 +78,128 @@ docker-compose logs -f
 
 ```yaml
 moa_presets:
-  - name: "moa-gpt4-claude"
-    description: "GPT-4 + Claude 组合"
-    
-    # Reference 模型（并行调用）
+  - name: "your-preset-name"
+    description: "你的预设描述"
+
     references:
       - provider: "openai"
-        model: "gpt-4-turbo-preview"
+        model: "gpt-4"
         api_key: "${OPENAI_API_KEY}"
         temperature: 0.7
         max_tokens: 2000
-      
+
       - provider: "anthropic"
-        model: "claude-3-sonnet-20240229"
+        model: "claude-3-sonnet"
         api_key: "${ANTHROPIC_API_KEY}"
         temperature: 0.7
         max_tokens: 2000
-    
-    # Aggregator 模型（汇总）
+
     aggregator:
       provider: "openai"
-      model: "gpt-4-turbo-preview"
+      model: "gpt-4"
       api_key: "${OPENAI_API_KEY}"
       temperature: 0.3
       max_tokens: 3000
-    
-    # 汇总提示词模板
+
     aggregator_prompt: |
-      你是一个专业的回答汇总助手。以下是多个 AI 助手的独立回答：
-      
+      你是一个专业的回答汇总助手。以下是多个 AI 助手的回答：
+
       {reference_responses}
-      
+
       请综合分析，生成更全面、准确的最终回答。
 ```
 
-### 环境变量
+更多配置选项请参考 [docs/CONFIG.md](file:///d:/desktop/moa/moa/docs/CONFIG.md)。
 
-在 `.env` 文件中配置 API Key：
+## API 接口
+
+### 聊天补全
+
+**请求：**
 
 ```bash
-OPENAI_API_KEY=sk-xxx
-ANTHROPIC_API_KEY=sk-ant-xxx
-MOA_API_KEY=your-moa-service-key
+POST /v1/chat/completions
 ```
 
-## API 文档
-
-### Chat Completions
-
-**POST** `/v1/chat/completions`
-
-请求参数（与 OpenAI 完全兼容）：
+**请求体：**
 
 ```json
 {
   "model": "moa-gpt4-claude",
   "messages": [
-    {"role": "user", "content": "你好"}
+    {"role": "user", "content": "解释一下量子计算"}
   ],
   "temperature": 0.7,
-  "max_tokens": 2000,
   "stream": false
 }
 ```
 
-### 获取模型列表
+**响应：**
 
-**GET** `/v1/models`
+```json
+{
+  "id": "chatcmpl-moa-abc123",
+  "object": "chat.completion",
+  "created": 1704067200,
+  "model": "moa-gpt4-claude",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "量子计算是..."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 150,
+    "completion_tokens": 300,
+    "total_tokens": 450
+  }
+}
+```
 
-返回所有可用的 MOA 预设。
+### 流式响应
+
+设置 `stream: true` 即可获得 SSE 流式输出。
+
+### 模型列表
+
+```bash
+GET /v1/models
+```
 
 ### 健康检查
 
-**GET** `/health`
+```bash
+GET /health
+```
 
-检查服务状态。
+### 统计信息
+
+```bash
+GET /stats
+```
+
+## 管理接口
 
 ### 热重载配置
 
-**POST** `/admin/reload`
-
-重新加载配置文件，无需重启服务。
-
-## 架构设计
-
-```
-┌─────────────────────────────────────────────────────┐
-│                  kaka_moa                            │
-│                                                      │
-│  ┌──────────────┐                                   │
-│  │  FastAPI     │  OpenAI 兼容 API                  │
-│  └──────┬───────┘                                   │
-│         │                                            │
-│  ┌──────▼───────────────────────────────────────┐  │
-│  │         MOA Orchestrator                      │  │
-│  │                                               │  │
-│  │  ┌─────────┐  ┌─────────┐  ┌─────────┐      │  │
-│  │  │ Ref 1   │  │ Ref 2   │  │ Ref N   │      │  │
-│  │  │ (并行)  │  │ (并行)  │  │ (并行)  │      │  │
-│  │  └────┬────┘  └────┬────┘  └────┬────┘      │  │
-│  │       └────────────┼────────────┘            │  │
-│  │                    │                          │  │
-│  │           ┌────────▼────────┐                │  │
-│  │           │   Aggregator    │                │  │
-│  │           │   (汇总模型)    │                │  │
-│  │           └────────┬────────┘                │  │
-│  │                    │                          │  │
-│  └────────────────────┼──────────────────────────┘  │
-│                       │                              │
-└───────────────────────┼──────────────────────────────┘
-                        │
-                        ▼
-                  最终响应返回
+```bash
+POST /admin/reload
 ```
 
-## 支持的 LLM 提供商
+### 获取配置
 
-- OpenAI (GPT-4, GPT-3.5)
-- Anthropic (Claude 3)
-- DeepSeek
-- 本地模型（Ollama, vLLM, 任何 OpenAI 兼容接口）
-
-## 项目结构
-
+```bash
+GET /admin/config
 ```
-kaka_moa/
-├── src/
-│   ├── main.py           # FastAPI 应用入口
-│   ├── orchestrator.py   # MOA 编排引擎
-│   ├── caller.py         # 统一模型调用器
-│   ├── config.py         # 配置管理
-│   ├── models.py         # 数据模型
-│   └── stream.py         # 流式响应处理
-├── docs/
-│   ├── API.md            # API 详细文档
-│   ├── CONFIG.md         # 配置说明
-│   └── DEPLOY.md         # 部署指南
-├── tests/                # 测试文件
-├── moa-config.yaml       # MOA 配置
-├── requirements.txt      # Python 依赖
-├── Dockerfile           # Docker 镜像
-├── docker-compose.yml   # Docker Compose
-└── README.md            # 项目说明
+
+### 保存配置
+
+```bash
+POST /admin/config
 ```
 
 ## 开发
@@ -227,24 +207,26 @@ kaka_moa/
 ### 运行测试
 
 ```bash
-pytest tests/
+pytest tests/ -v
 ```
 
-### 代码格式化
+### 项目结构
 
-```bash
-black src/
-isort src/
+```text
+moa/
+├── src/
+│   ├── main.py          # FastAPI 入口
+│   ├── orchestrator.py  # MOA 编排引擎
+│   ├── caller.py        # 统一模型调用器
+│   ├── config.py        # 配置管理
+│   ├── models.py        # 数据模型
+│   └── stream.py        # 流式响应处理
+├── tests/               # 测试文件
+├── docs/                # 文档
+├── moa-config.yaml      # 配置文件
+└── requirements.txt     # Python 依赖
 ```
 
 ## 许可证
 
-MIT License
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 联系方式
-
-如有问题，请提交 Issue 或联系开发者。
+MIT

@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "skill__security_review",
+    "description": "调用安全审查 SKILL，对代码差异进行安全扫描",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "type": "string",
+          "description": "仓库名称"
+        },
+        "pr_number": {
+          "type": "integer",
+          "description": "Pull Request 编号"
+        }
+      },
+      "required": ["repo", "pr_number"]
+    }
+  }
+}

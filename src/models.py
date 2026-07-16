@@ -1,6 +1,6 @@
 """kaka_moa - 数据模型定义"""
 
-from typing import List, Optional, Dict, Any, Literal
+from typing import List, Optional, Dict, Any, Literal, Union
 from pydantic import BaseModel, Field
 import time
 import uuid
@@ -10,11 +10,50 @@ import uuid
 # OpenAI 兼容的请求/响应模型
 # ============================================================================
 
+class ChatMessageToolCallFunction(BaseModel):
+    """工具调用函数定义"""
+    name: str
+    arguments: str
+
+
+class ChatMessageToolCall(BaseModel):
+    """工具调用信息"""
+    id: str = Field(default_factory=lambda: f"call_{uuid.uuid4().hex[:12]}")
+    type: Literal["function"] = "function"
+    function: ChatMessageToolCallFunction
+
+
 class ChatMessage(BaseModel):
     """聊天消息"""
     role: Literal["system", "user", "assistant", "tool"]
     content: str
     name: Optional[str] = None
+    tool_call_id: Optional[str] = None
+    tool_calls: Optional[List[ChatMessageToolCall]] = None
+
+
+class ToolFunctionDefinition(BaseModel):
+    """函数工具定义"""
+    name: str
+    description: Optional[str] = None
+    parameters: Optional[Dict[str, Any]] = None
+
+
+class ToolDefinition(BaseModel):
+    """工具定义"""
+    type: Literal["function"] = "function"
+    function: ToolFunctionDefinition
+
+
+class ToolChoiceFunction(BaseModel):
+    """指定工具函数"""
+    name: str
+
+
+class ToolChoiceObject(BaseModel):
+    """工具选择对象"""
+    type: Literal["function"] = "function"
+    function: ToolChoiceFunction
 
 
 class ChatCompletionRequest(BaseModel):
@@ -28,6 +67,8 @@ class ChatCompletionRequest(BaseModel):
     frequency_penalty: Optional[float] = None
     presence_penalty: Optional[float] = None
     stop: Optional[List[str]] = None
+    tools: Optional[List[ToolDefinition]] = None
+    tool_choice: Optional[Union[Literal["none", "auto", "required"], ToolChoiceObject]] = None
 
 
 class ChatCompletionResponseChoice(BaseModel):
@@ -96,12 +137,14 @@ class MOAPreset(BaseModel):
 {reference_responses}
 
 请综合分析以上回答，提取最有价值的信息，生成一个更全面、准确、有用的最终回答。"""
+    skill_dir: Optional[str] = None
+    mcp_dir: Optional[str] = None
 
 
 class ServerConfig(BaseModel):
     """服务器配置"""
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 7890
     api_key: str = ""
     rate_limit: int = 100
 

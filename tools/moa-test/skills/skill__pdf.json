@@ -1,0 +1,22 @@
+{
+  "type": "function",
+  "function": {
+    "name": "skill__pdf",
+    "description": "调用 PDF 处理 SKILL，用于读取或提取 PDF 文件内容",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "PDF 文件路径"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["read", "extract_text", "extract_images"],
+          "description": "对 PDF 执行的操作"
+        }
+      },
+      "required": ["path", "action"]
+    }
+  }
+}

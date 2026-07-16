@@ -10,6 +10,8 @@ server:
 moa_presets:
   - name: "moa-test"
     description: "qwen3.7-plus + glm-5.2 组合（OneAPI）"
+    skill_dir: "./tools/moa-test/skills"
+    mcp_dir: "./tools/moa-test/mcps"
 
     references:
       - provider: "openai_compatible"
@@ -48,3 +50,29 @@ moa_presets:
       2. 如果有冲突，选择最可靠的答案
       3. 补充遗漏的重要细节
       4. 用清晰的结构组织答案
+
+  - name: "moa-prod"
+    description: "生产操作专用 MOA，隔离高风险工具"
+    skill_dir: "./tools/moa-prod/skills"
+    mcp_dir: "./tools/moa-prod/mcps"
+
+    references:
+      - provider: "openai_compatible"
+        model: "qwen3.7-plus"
+        api_key: "${ONEAPI_API_KEY}"
+        base_url: "${ONEAPI_BASE_URL}"
+        temperature: 0.4
+        max_tokens: 65536
+        timeout: 300
+
+    aggregator:
+      provider: "openai_compatible"
+      model: "qwen3.7-plus"
+      api_key: "${ONEAPI_API_KEY}"
+      base_url: "${ONEAPI_BASE_URL}"
+      temperature: 0.2
+      max_tokens: 65536
+      timeout: 300
+
+    aggregator_prompt: |
+      你是一个生产操作助手。请在必要时调用当前 MOA 可用的工具，但只能使用已授权工具，并在执行前明确说明目的。

@@ -1,0 +1,34 @@
+{
+  "type": "function",
+  "function": {
+    "name": "mcp__github__create_issue",
+    "description": "通过 MCP GitHub 服务在指定仓库创建 Issue",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "仓库 owner"
+        },
+        "repo": {
+          "type": "string",
+          "description": "仓库名称"
+        },
+        "title": {
+          "type": "string",
+          "description": "Issue 标题"
+        },
+        "body": {
+          "type": "string",
+          "description": "Issue 内容"
+        },
+        "labels": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "标签列表"
+        }
+      },
+      "required": ["owner", "repo", "title"]
+    }
+  }
+}

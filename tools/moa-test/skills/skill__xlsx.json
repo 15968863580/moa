@@ -1,0 +1,26 @@
+{
+  "type": "function",
+  "function": {
+    "name": "skill__xlsx",
+    "description": "调用 XLSX 处理 SKILL，用于读取或生成 Excel 文件",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Excel 文件路径"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["read", "write"],
+          "description": "对 Excel 执行的操作"
+        },
+        "sheet": {
+          "type": "string",
+          "description": "工作表名称"
+        }
+      },
+      "required": ["path", "action"]
+    }
+  }
+}

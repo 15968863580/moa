@@ -1,0 +1,29 @@
+{
+  "type": "function",
+  "function": {
+    "name": "mcp__github__merge_pull_request",
+    "description": "通过 MCP GitHub 服务合并指定 Pull Request",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "仓库 owner"
+        },
+        "repo": {
+          "type": "string",
+          "description": "仓库名称"
+        },
+        "pull_number": {
+          "type": "integer",
+          "description": "Pull Request 编号"
+        },
+        "commit_title": {
+          "type": "string",
+          "description": "合并提交标题"
+        }
+      },
+      "required": ["owner", "repo", "pull_number"]
+    }
+  }
+}
