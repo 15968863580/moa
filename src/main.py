@@ -193,24 +193,32 @@ async def chat_completions(
 def _claude_to_openai_request(claude_request: ClaudeMessageRequest) -> ChatCompletionRequest:
     """将 Claude Messages API 请求转换为内部 OpenAI 格式请求"""
     messages = []
+    system_parts = []
 
-    # Claude 的 system 是顶层参数，转换为 OpenAI 的 system 消息
+    # 从顶层 system 参数提取
     if claude_request.system:
         system_content = claude_request.system
         if isinstance(system_content, list):
-            # 如果是 content block 列表，拼接文本
             system_content = " ".join(
                 block.text for block in system_content if block.text
             )
-        messages.append(ChatMessage(role="system", content=system_content))
+        system_parts.append(system_content)
 
-    # 转换消息列表
+    # 转换消息列表，提取 messages 中的 system 角色消息
     for msg in claude_request.messages:
         content = msg.content
         if isinstance(content, list):
-            # content block 列表拼接为文本
             content = " ".join(block.text for block in content if block.text)
-        messages.append(ChatMessage(role=msg.role, content=content or ""))
+
+        if msg.role == "system":
+            # 客户端不标准地把 system 放在 messages 里，提取出来
+            system_parts.append(content or "")
+        else:
+            messages.append(ChatMessage(role=msg.role, content=content or ""))
+
+    # system 消息放在最前面
+    if system_parts:
+        messages.insert(0, ChatMessage(role="system", content="\n".join(system_parts)))
 
     # 转换 stop_sequences -> stop
     stop = claude_request.stop_sequences

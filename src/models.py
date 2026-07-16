@@ -128,7 +128,7 @@ class ClaudeContentBlock(BaseModel):
 
 class ClaudeMessage(BaseModel):
     """Claude 聊天消息"""
-    role: Literal["user", "assistant"]
+    role: Literal["user", "assistant", "system"]
     content: Union[str, List[ClaudeContentBlock]]
 
 
