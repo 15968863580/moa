@@ -87,6 +87,90 @@ data: {"id":"chatcmpl-moa-abc123","object":"chat.completion.chunk","created":123
 data: [DONE]
 ```
 
+### 1.5 Claude Messages API
+
+**POST** `/v1/messages`
+
+与 Anthropic Claude Messages API 兼容。客户端可通过 `x-api-key` 或 `Authorization: Bearer` 认证，通过 `model` 参数选择 MOA 预设。
+
+#### 请求参数
+
+```json
+{
+  "model": "moa-gpt4-claude",
+  "max_tokens": 1024,
+  "system": "你是一个有帮助的助手",
+  "messages": [
+    {"role": "user", "content": "你好"}
+  ],
+  "temperature": 0.7,
+  "top_p": 1.0,
+  "stream": false
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| model | string | 是 | MOA 预设名称 |
+| messages | array | 是 | 消息列表（role 仅支持 user/assistant） |
+| max_tokens | int | 是 | 最大生成 token 数 |
+| system | string | 否 | 系统提示词（顶层参数） |
+| temperature | float | 否 | 温度参数 |
+| top_p | float | 否 | Top-p 采样 |
+| top_k | int | 否 | Top-k 采样 |
+| stop_sequences | array | 否 | 停止词列表 |
+| stream | bool | 否 | 是否流式输出，默认 false |
+
+#### 非流式响应
+
+```json
+{
+  "id": "msg_moa-abc123",
+  "type": "message",
+  "role": "assistant",
+  "model": "moa-gpt4-claude",
+  "content": [
+    {
+      "type": "text",
+      "text": "你好！有什么可以帮助你的吗？"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 10,
+    "output_tokens": 20
+  }
+}
+```
+
+#### 流式响应
+
+设置 `stream: true`，返回 Claude SSE 事件格式：
+
+```
+event: message_start
+data: {"type":"message_start","message":{"id":"msg_moa-abc123","type":"message","role":"assistant","model":"moa-gpt4-claude","content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"你好"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"！"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":20}}
+
+event: message_stop
+data: {"type":"message_stop"}
+```
+
 ### 2. 获取模型列表
 
 **GET** `/v1/models`
@@ -271,4 +355,64 @@ const response = await fetch('http://localhost:8000/v1/chat/completions', {
 
 const data = await response.json();
 console.log(data.choices[0].message.content);
+```
+
+### Python (Anthropic SDK - Claude 兼容)
+
+```python
+import anthropic
+
+client = anthropic.Anthropic(
+    base_url="http://localhost:8000",
+    api_key="your-moa-api-key"
+)
+
+# 非流式
+response = client.messages.create(
+    model="moa-gpt4-claude",
+    max_tokens=1024,
+    system="你是一个有帮助的助手",
+    messages=[
+        {"role": "user", "content": "你好"}
+    ]
+)
+print(response.content[0].text)
+
+# 流式
+with client.messages.stream(
+    model="moa-gpt4-claude",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "你好"}
+    ]
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)
+```
+
+### cURL (Claude 兼容)
+
+```bash
+# 非流式
+curl http://localhost:8000/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-moa-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "moa-gpt4-claude",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "你好"}]
+  }'
+
+# 流式
+curl http://localhost:8000/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-moa-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "moa-gpt4-claude",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "你好"}],
+    "stream": true
+  }'
 ```

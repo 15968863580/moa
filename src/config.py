@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, Optional
 from dotenv import load_dotenv
 
-from .models import AppConfig, ServerConfig, MOAPreset, ModelConfig
+from .models import AppConfig, ServerConfig, MOAPreset, ModelConfig, MCPServerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -60,20 +60,36 @@ class ConfigManager:
                 aggregator_prompt=preset_data.get('aggregator_prompt', ''),
                 skill_dir=self._resolve_optional_path(preset_data.get('skill_dir'), config_dir),
                 mcp_dir=self._resolve_optional_path(preset_data.get('mcp_dir'), config_dir),
+                builtin_tools=preset_data.get('builtin_tools', []),
             )
             presets.append(preset)
 
-        self._config = AppConfig(server=server_config, moa_presets=presets)
+        mcp_servers: Dict[str, MCPServerConfig] = {}
+        for server_name, server_data in (raw_config.get('mcp_servers') or {}).items():
+            mcp_servers[server_name] = MCPServerConfig(**server_data)
+
+        self._config = AppConfig(
+            server=server_config,
+            moa_presets=presets,
+            mcp_servers=mcp_servers
+        )
 
         # 构建预设映射
         self._presets_map = {p.name: p for p in presets}
 
-        logger.info(f"Config loaded: {len(presets)} presets")
+        logger.info(f"Config loaded: {len(presets)} presets, {len(mcp_servers)} mcp servers")
         for preset in presets:
             logger.info(
                 f"  - {preset.name}: {len(preset.references)} references + 1 agg, "
-                f"skill_dir={preset.skill_dir}, mcp_dir={preset.mcp_dir}"
+                f"skill_dir={preset.skill_dir}, mcp_dir={preset.mcp_dir}, "
+                f"builtin_tools={preset.builtin_tools}"
             )
+        if mcp_servers:
+            logger.info(f"  MCP servers: {list(mcp_servers.keys())}")
+
+        # 同步 MCP server 配置到工具执行器（保证 reload 后立即生效）
+        from .tool_executor import tool_executor
+        tool_executor.configure_mcp_servers(self._config.mcp_servers)
 
     def _resolve_env_vars(self, obj):
         """递归解析配置中的环境变量 ${VAR_NAME}"""

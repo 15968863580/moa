@@ -7,11 +7,28 @@ server:
   api_key: "${MOA_API_KEY}"
   rate_limit: 100
 
+# 全局 MCP Server 配置（工具名 mcp__{server}__{tool} 会路由到对应 server）
+# transport: stdio | streamable_http | sse
+mcp_servers:
+  github:
+    transport: "streamable_http"
+    url: "${MCP_GITHUB_URL}"        # 例如 http://localhost:3000/mcp
+    timeout: 60
+    # headers:
+    #   Authorization: "Bearer ${GITHUB_TOKEN}"
+  # stdio 示例（按需拉起本地子进程）
+  # filesystem:
+  #   transport: "stdio"
+  #   command: "npx"
+  #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+  #   env: {}
+
 moa_presets:
   - name: "moa-test"
     description: "qwen3.7-plus + glm-5.2 组合（OneAPI）"
     skill_dir: "./tools/moa-test/skills"
     mcp_dir: "./tools/moa-test/mcps"
+    builtin_tools: ["web_search", "web_fetch", "read_file"]   # exec 高风险，按需添加
 
     references:
       - provider: "openai_compatible"
@@ -55,6 +72,7 @@ moa_presets:
     description: "生产操作专用 MOA，隔离高风险工具"
     skill_dir: "./tools/moa-prod/skills"
     mcp_dir: "./tools/moa-prod/mcps"
+    builtin_tools: ["web_fetch"]   # 生产环境仅启用低风险内置工具
 
     references:
       - provider: "openai_compatible"

@@ -112,6 +112,71 @@ class ChatCompletionStreamResponse(BaseModel):
 
 
 # ============================================================================
+# Claude (Anthropic) 兼容的请求/响应模型
+# ============================================================================
+
+class ClaudeContentBlock(BaseModel):
+    """Claude 内容块"""
+    type: Literal["text", "tool_use", "tool_result"] = "text"
+    text: Optional[str] = None
+    id: Optional[str] = None
+    name: Optional[str] = None
+    input: Optional[Dict[str, Any]] = None
+    tool_use_id: Optional[str] = None
+    content: Optional[Union[str, List["ClaudeContentBlock"]]] = None
+
+
+class ClaudeMessage(BaseModel):
+    """Claude 聊天消息"""
+    role: Literal["user", "assistant"]
+    content: Union[str, List[ClaudeContentBlock]]
+
+
+class ClaudeToolChoice(BaseModel):
+    """Claude 工具选择对象"""
+    type: Literal["auto", "any", "tool"] = "auto"
+    name: Optional[str] = None
+
+
+class ClaudeMessageRequest(BaseModel):
+    """Claude Messages API 请求"""
+    model: str
+    messages: List[ClaudeMessage]
+    max_tokens: int
+    system: Optional[Union[str, List[ClaudeContentBlock]]] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    top_k: Optional[int] = None
+    stop_sequences: Optional[List[str]] = None
+    stream: Optional[bool] = False
+    tools: Optional[List[Dict[str, Any]]] = None
+    tool_choice: Optional[Union[Literal["auto", "any"], ClaudeToolChoice]] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class ClaudeUsage(BaseModel):
+    """Claude Token 使用统计"""
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class ClaudeMessageResponse(BaseModel):
+    """Claude Messages API 响应"""
+    id: str = Field(default_factory=lambda: f"msg_moa-{uuid.uuid4().hex[:12]}")
+    type: str = "message"
+    role: str = "assistant"
+    model: str
+    content: List[ClaudeContentBlock]
+    stop_reason: Optional[str] = "end_turn"
+    stop_sequence: Optional[str] = None
+    usage: ClaudeUsage = Field(default_factory=ClaudeUsage)
+
+
+# 重建前向引用（ClaudeContentBlock 的 content 字段引用了自身）
+ClaudeContentBlock.model_rebuild()
+
+
+# ============================================================================
 # 配置模型
 # ============================================================================
 
@@ -124,6 +189,24 @@ class ModelConfig(BaseModel):
     temperature: float = 0.7
     max_tokens: int = 2000
     timeout: int = 60
+
+
+class MCPServerConfig(BaseModel):
+    """单个 MCP Server 配置（用于 mcp__ 真实转发）
+
+    工具名形如 mcp__{server}__{tool}，会路由到对应 server。
+    transport 支持:
+      - stdio: 本地子进程（command + args + env）
+      - streamable_http: MCP Streamable HTTP transport
+      - sse: MCP SSE transport
+    """
+    transport: Literal["stdio", "streamable_http", "sse"] = "stdio"
+    command: Optional[str] = None  # stdio: 可执行命令
+    args: List[str] = Field(default_factory=list)  # stdio: 命令参数
+    env: Dict[str, str] = Field(default_factory=dict)  # stdio: 子进程环境变量
+    url: Optional[str] = None  # streamable_http / sse: 服务地址
+    headers: Dict[str, str] = Field(default_factory=dict)  # http 类: 请求头
+    timeout: int = 60  # 单次工具调用超时（秒）
 
 
 class MOAPreset(BaseModel):
@@ -139,6 +222,7 @@ class MOAPreset(BaseModel):
 请综合分析以上回答，提取最有价值的信息，生成一个更全面、准确、有用的最终回答。"""
     skill_dir: Optional[str] = None
     mcp_dir: Optional[str] = None
+    builtin_tools: List[str] = Field(default_factory=list)
 
 
 class ServerConfig(BaseModel):
@@ -153,6 +237,8 @@ class AppConfig(BaseModel):
     """应用配置"""
     server: ServerConfig = Field(default_factory=ServerConfig)
     moa_presets: List[MOAPreset] = Field(default_factory=list)
+    # 全局共享的 MCP Server 配置，工具名 mcp__{server}__{tool} 会路由到这里
+    mcp_servers: Dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
 # ============================================================================

@@ -3,11 +3,11 @@
 import logging
 import time
 from contextlib import asynccontextmanager
-from typing import Dict
+from typing import Dict, Optional
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Depends, Request, Body
+from fastapi import FastAPI, HTTPException, Depends, Request, Body, Header
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
@@ -20,9 +20,15 @@ from .models import (
     ModelListResponse,
     ModelInfo,
     HealthResponse,
-    StatsResponse
+    StatsResponse,
+    ClaudeMessageRequest,
+    ClaudeMessageResponse,
+    ClaudeContentBlock,
+    ClaudeUsage,
+    ChatMessage,
 )
 from .orchestrator import orchestrator
+from .stream import ClaudeStreamHandler
 
 # 配置日志：控制台 + 按天滚动文件（全量 logs/moa.log + 错误 logs/error.log）
 setup_logging()
@@ -83,6 +89,34 @@ async def verify_api_key(
     
     if not credentials or credentials.credentials != expected_key:
         raise HTTPException(status_code=401, detail="Invalid API key")
+
+
+async def verify_api_key_flexible(
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None, alias="x-api-key")
+):
+    """验证 API Key - 同时兼容 OpenAI (Authorization: Bearer) 和 Claude (x-api-key) 认证方式"""
+    expected_key = config_manager.server_config.api_key
+
+    # 如果未配置 API Key，跳过认证
+    if not expected_key:
+        return
+
+    # 优先检查 x-api-key (Claude 风格)
+    if x_api_key:
+        if x_api_key == expected_key:
+            return
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # 检查 Authorization: Bearer (OpenAI 风格)
+    if authorization:
+        parts = authorization.split(" ", 1)
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            if parts[1] == expected_key:
+                return
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    raise HTTPException(status_code=401, detail="Missing API key")
 
 
 # ============================================================================
@@ -149,6 +183,154 @@ async def chat_completions(
     except Exception as e:
         stats["failed_requests"] += 1
         logger.error(f"Execution error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Claude (Anthropic) 兼容 API 路由
+# ============================================================================
+
+def _claude_to_openai_request(claude_request: ClaudeMessageRequest) -> ChatCompletionRequest:
+    """将 Claude Messages API 请求转换为内部 OpenAI 格式请求"""
+    messages = []
+
+    # Claude 的 system 是顶层参数，转换为 OpenAI 的 system 消息
+    if claude_request.system:
+        system_content = claude_request.system
+        if isinstance(system_content, list):
+            # 如果是 content block 列表，拼接文本
+            system_content = " ".join(
+                block.text for block in system_content if block.text
+            )
+        messages.append(ChatMessage(role="system", content=system_content))
+
+    # 转换消息列表
+    for msg in claude_request.messages:
+        content = msg.content
+        if isinstance(content, list):
+            # content block 列表拼接为文本
+            content = " ".join(block.text for block in content if block.text)
+        messages.append(ChatMessage(role=msg.role, content=content or ""))
+
+    # 转换 stop_sequences -> stop
+    stop = claude_request.stop_sequences
+
+    return ChatCompletionRequest(
+        model=claude_request.model,
+        messages=messages,
+        temperature=claude_request.temperature,
+        max_tokens=claude_request.max_tokens,
+        stream=claude_request.stream,
+        top_p=claude_request.top_p,
+        stop=stop,
+        # Claude API 不支持 frequency_penalty / presence_penalty，留空
+        frequency_penalty=None,
+        presence_penalty=None,
+    )
+
+
+def _openai_response_to_claude(response: ChatCompletionResponse) -> ClaudeMessageResponse:
+    """将内部 OpenAI 格式响应转换为 Claude Messages API 响应"""
+    # 提取 assistant 消息内容
+    content_text = ""
+    if response.choices and response.choices[0].message:
+        content_text = response.choices[0].message.content or ""
+
+    # 转换 finish_reason -> stop_reason
+    finish_reason = response.choices[0].finish_reason if response.choices else "stop"
+    stop_reason_map = {
+        "stop": "end_turn",
+        "length": "max_tokens",
+        "tool_calls": "tool_use",
+    }
+    stop_reason = stop_reason_map.get(finish_reason, "end_turn")
+
+    # 转换 usage
+    usage = ClaudeUsage(
+        input_tokens=response.usage.prompt_tokens,
+        output_tokens=response.usage.completion_tokens,
+    )
+
+    return ClaudeMessageResponse(
+        model=response.model,
+        content=[ClaudeContentBlock(type="text", text=content_text)],
+        stop_reason=stop_reason,
+        stop_sequence=None,
+        usage=usage,
+    )
+
+
+@app.post("/v1/messages", response_model=ClaudeMessageResponse)
+async def claude_messages(
+    request: ClaudeMessageRequest,
+    _: None = Depends(verify_api_key_flexible)
+):
+    """
+    Claude Messages API - Anthropic 兼容
+
+    客户端通过 model 参数选择 MOA 预设。
+    支持 x-api-key 和 Authorization: Bearer 两种认证方式。
+    """
+    start_time = time.time()
+    stats["total_requests"] += 1
+
+    # 检查预设是否存在
+    preset = config_manager.get_preset(request.model)
+    if not preset:
+        stats["failed_requests"] += 1
+        available = config_manager.list_presets()
+        raise HTTPException(
+            status_code=404,
+            detail=f"Model '{request.model}' not found. Available models: {available}"
+        )
+
+    try:
+        # 转换为内部 OpenAI 格式请求
+        openai_request = _claude_to_openai_request(request)
+
+        if request.stream:
+            # Claude 流式响应
+            async def generate():
+                try:
+                    # 先用非流式跑完 MOA 流程（工具调用需完整结果）
+                    response = await orchestrator.execute(openai_request, preset)
+                    content = response.choices[0].message.content or ""
+                    input_tokens = response.usage.prompt_tokens
+                    stats["successful_requests"] += 1
+                    async for chunk in ClaudeStreamHandler.stream_text(
+                        content, preset.name, input_tokens=input_tokens
+                    ):
+                        yield chunk
+                except Exception as e:
+                    stats["failed_requests"] += 1
+                    logger.error(f"Claude stream error: {e}", exc_info=True)
+                    raise
+
+            return StreamingResponse(
+                generate(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no"
+                }
+            )
+        else:
+            # 非流式响应
+            response = await orchestrator.execute(openai_request, preset)
+            claude_response = _openai_response_to_claude(response)
+
+            # 更新统计
+            stats["successful_requests"] += 1
+            stats["total_tokens"] += response.usage.total_tokens
+            elapsed_ms = (time.time() - start_time) * 1000
+            stats["total_latency_ms"] += elapsed_ms
+
+            return claude_response
+
+    except Exception as e:
+        stats["failed_requests"] += 1
+        logger.error(f"Claude execution error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

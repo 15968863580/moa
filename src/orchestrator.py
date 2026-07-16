@@ -51,8 +51,21 @@ class MOAOrchestrator:
             "stop": request.stop,
         }
 
+        # 预加载工具定义（reference 与 aggregator 共用同一套工具）
+        allowed_tools = tool_executor.load_definitions(
+            request.tools,
+            skill_dir=preset.skill_dir,
+            mcp_dir=preset.mcp_dir,
+            builtin_tools=preset.builtin_tools,
+        )
+        tools_param = tool_executor.build_tool_schemas(allowed_tools)
+        tools_for_call = tools_param if tools_param else None
+
         reference_tasks = [
-            self._call_reference_model(ref_config, messages, request_id, i, **sampling_params)
+            self._call_reference_model(
+                ref_config, messages, request_id, i,
+                tools_for_call, request.tool_choice, **sampling_params
+            )
             for i, ref_config in enumerate(preset.references)
         ]
         reference_results = await asyncio.gather(*reference_tasks, return_exceptions=True)
@@ -90,17 +103,10 @@ class MOAOrchestrator:
         )
 
         logger.info(f"[{request_id}] Calling aggregator model")
-        allowed_tools = tool_executor.load_definitions(
-            request.tools,
-            skill_dir=preset.skill_dir,
-            mcp_dir=preset.mcp_dir
-        )
-        tools_param = tool_executor.build_tool_schemas(allowed_tools)
-
         aggregator_result = await self._call_with_tools(
             config=preset.aggregator,
             messages=aggregator_messages,
-            tools=tools_param if tools_param else None,
+            tools=tools_for_call,
             tool_choice=request.tool_choice,
             request_id=request_id,
             **sampling_params
@@ -156,8 +162,21 @@ class MOAOrchestrator:
             "stop": request.stop,
         }
 
+        # 预加载工具定义
+        allowed_tools = tool_executor.load_definitions(
+            request.tools,
+            skill_dir=preset.skill_dir,
+            mcp_dir=preset.mcp_dir,
+            builtin_tools=preset.builtin_tools,
+        )
+        tools_param = tool_executor.build_tool_schemas(allowed_tools)
+        tools_for_call = tools_param if tools_param else None
+
         reference_tasks = [
-            self._call_reference_model(ref_config, messages, request_id, i, **sampling_params)
+            self._call_reference_model(
+                ref_config, messages, request_id, i,
+                tools_for_call, request.tool_choice, **sampling_params
+            )
             for i, ref_config in enumerate(preset.references)
         ]
         reference_results = await asyncio.gather(*reference_tasks, return_exceptions=True)
@@ -187,14 +206,19 @@ class MOAOrchestrator:
         )
 
         logger.info(f"[{request_id}] Calling aggregator model (stream)")
-        aggregator_stream = await model_caller.call(
-            preset.aggregator,
-            aggregator_messages,
-            stream=True,
+        # 流式模式下：先用非流式跑完工具循环（工具调用需完整结果），
+        # 再把最终内容切分模拟流式输出回放给客户端
+        aggregator_result = await self._call_with_tools(
+            config=preset.aggregator,
+            messages=aggregator_messages,
+            tools=tools_for_call,
+            tool_choice=request.tool_choice,
+            request_id=request_id,
             **sampling_params
         )
 
-        async for chunk in StreamHandler.stream_response(aggregator_stream, preset.name):
+        final_content = aggregator_result.get("content", "") or ""
+        async for chunk in StreamHandler.stream_text(final_content, preset.name):
             yield chunk
 
         elapsed_ms = (time.time() - start_time) * 1000
@@ -212,7 +236,7 @@ class MOAOrchestrator:
         current_messages = list(messages)
 
         for round_idx in range(MAX_TOOL_ROUNDS):
-            logger.info(f"[{request_id}] Aggregator round {round_idx + 1}")
+            logger.info(f"[{request_id}] {config.model} round {round_idx + 1}")
             result = await model_caller.call(
                 config,
                 current_messages,
@@ -224,7 +248,7 @@ class MOAOrchestrator:
 
             tool_calls = result.get("tool_calls") or []
             if not tool_calls:
-                logger.info(f"[{request_id}] Aggregator finished at round {round_idx + 1}")
+                logger.info(f"[{request_id}] {config.model} finished at round {round_idx + 1}")
                 return result
 
             current_messages.append({
@@ -259,7 +283,7 @@ class MOAOrchestrator:
 
         logger.warning(
             f"[{request_id}] Reached max tool rounds ({MAX_TOOL_ROUNDS}), "
-            f"returning last aggregator response"
+            f"returning last {config.model} response"
         )
         return result
 
@@ -269,22 +293,23 @@ class MOAOrchestrator:
         messages: List[Dict[str, str]],
         request_id: str,
         index: int,
+        tools: Optional[List[Dict[str, Any]]],
+        tool_choice: Optional[Any],
         **sampling_params
     ) -> Dict[str, Any]:
         logger.info(f"[{request_id}] Calling reference model {index}: {config.model}")
-
-        result = await model_caller.call(
-            config,
-            messages,
-            stream=False,
+        result = await self._call_with_tools(
+            config=config,
+            messages=messages,
+            tools=tools,
+            tool_choice=tool_choice,
+            request_id=request_id,
             **sampling_params
         )
-
         logger.info(
             f"[{request_id}] Reference model {index} completed, "
             f"tokens: {result['usage']['total_tokens']}"
         )
-
         return result  # type: ignore
 
     def _build_aggregator_prompt(

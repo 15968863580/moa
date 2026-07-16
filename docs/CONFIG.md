@@ -46,6 +46,7 @@ moa_presets:
 | description | string | 否 | 预设描述 |
 | skill_dir | string | 否 | 当前 MOA 可用的 SKILL 定义目录 |
 | mcp_dir | string | 否 | 当前 MOA 可用的 MCP 定义目录 |
+| builtin_tools | array | 否 | 启用的内置工具短名列表，如 `["web_search", "web_fetch"]` |
 | references | array | 是 | Reference 模型列表 |
 | aggregator | object | 是 | Aggregator 模型配置 |
 | aggregator_prompt | string | 否 | 汇总提示词模板 |
@@ -83,7 +84,8 @@ tools/
 ### 工具命名规则
 
 - `skill_dir` 下的工具名必须以 `skill__` 开头
-- `mcp_dir` 下的工具名必须以 `mcp__` 开头
+- `mcp_dir` 下的工具名必须以 `mcp__` 开头（格式 `mcp__{server}__{tool}`，会路由到对应 MCP server）
+- 内置工具名以 `builtin__` 开头（由 `builtin_tools` 配置启用，见下文）
 
 如果命名不符合规则，加载配置后的工具执行阶段会报错。
 
@@ -339,6 +341,67 @@ moa_presets:
 
       请综合分析，生成更全面、准确的最终回答。
 ```
+
+## MCP Server 配置
+
+`mcp_servers` 是全局共享的 MCP server 配置（不在 preset 内）。工具名 `mcp__{server}__{tool}` 会被路由到对应 server 的 `call_tool`，实现真实转发（基于官方 mcp SDK）。
+
+```yaml
+mcp_servers:
+  github:
+    transport: "streamable_http"   # 或 stdio / sse
+    url: "${MCP_GITHUB_URL}"
+    headers:
+      Authorization: "Bearer ${GITHUB_TOKEN}"
+    timeout: 60
+  filesystem:
+    transport: "stdio"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    env: {}
+```
+
+| 字段 | 适用 transport | 说明 |
+|------|----------------|------|
+| transport | 全部 | `stdio` / `streamable_http` / `sse` |
+| command / args / env | stdio | 子进程命令、参数、环境变量 |
+| url / headers | streamable_http / sse | 服务地址、请求头 |
+| timeout | 全部 | 单次工具调用超时（秒） |
+
+> MCP server 仅在工具被实际调用时才连接，配置存在不会在启动时拉起子进程。
+
+## 内置工具（builtin__）
+
+通过 preset 的 `builtin_tools` 字段启用，在 moa 进程内直接执行，无需外部 MCP/SKILL。**默认为空（不启用任何内置工具）**，需显式列出短名：
+
+```yaml
+moa_presets:
+  - name: "moa-test"
+    builtin_tools: ["web_search", "web_fetch", "read_file"]
+    # exec 高风险，仅在可信场景按需添加
+```
+
+可用内置工具：
+
+| 短名 | 说明 | 依赖环境变量 |
+|------|------|--------------|
+| `web_search` | 联网搜索，返回标题/URL/摘要 | `WEB_SEARCH_API_BASE_URL`（必填）、`WEB_SEARCH_API_KEY`（可选） |
+| `web_fetch` | 抓取指定 URL 内容 | 无 |
+| `read_file` | 读取服务端本地文件 | `EXEC_WORK_DIR`（相对路径基准，可选） |
+| `exec` | 执行 shell 命令（高风险） | `EXEC_WORK_DIR`、`EXEC_TIMEOUT` |
+
+安全建议：`exec` 可在服务端执行任意命令，生产环境不建议启用；如必须启用，配合 `EXEC_WORK_DIR` 限定工作目录。
+
+### 工具调用流程
+
+改造后，**Reference 与 Aggregator 模型都能调用工具**（共用同一套 allowed_tools）。流程：
+
+1. 预加载工具定义（skill_dir + mcp_dir + builtin_tools）
+2. 各 Reference 模型独立跑工具循环（最多 `MAX_TOOL_ROUNDS=5` 轮）
+3. Aggregator 汇总各 Reference 回答
+4. Aggregator 自身再跑一轮工具循环并产出最终回答
+
+流式请求下，工具循环仍以非流式执行（工具调用需完整结果），最终内容再切分模拟流式输出。
 
 ## 热重载配置
 
