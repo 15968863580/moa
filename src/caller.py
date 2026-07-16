@@ -74,8 +74,13 @@ class ModelCaller:
             call_params["base_url"] = config.base_url
         if config.timeout:
             call_params["timeout"] = config.timeout
-        if config.extra_body:
-            call_params["extra_body"] = config.extra_body
+        
+        # 默认关闭思考模式（reasoning models），除非配置中明确开启
+        extra_body = config.extra_body.copy() if config.extra_body else {}
+        if "enable_thinking" not in extra_body:
+            extra_body["enable_thinking"] = False
+        if extra_body:
+            call_params["extra_body"] = extra_body
 
         if temperature is not None:
             call_params["temperature"] = temperature
