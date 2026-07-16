@@ -74,6 +74,8 @@ class ModelCaller:
             call_params["base_url"] = config.base_url
         if config.timeout:
             call_params["timeout"] = config.timeout
+        if config.extra_body:
+            call_params["extra_body"] = config.extra_body
 
         if temperature is not None:
             call_params["temperature"] = temperature

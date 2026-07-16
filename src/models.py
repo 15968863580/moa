@@ -189,6 +189,7 @@ class ModelConfig(BaseModel):
     temperature: float = 0.7
     max_tokens: int = 2000
     timeout: int = 60
+    extra_body: Optional[Dict[str, Any]] = None  # 额外参数，如 {"enable_thinking": False}
 
 
 class MCPServerConfig(BaseModel):
