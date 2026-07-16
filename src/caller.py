@@ -19,6 +19,7 @@ class ModelCaller:
     def __init__(self):
         # 配置 litellm
         litellm.suppress_debug_info = True
+        litellm.drop_params = True  # 自动丢弃模型不支持的参数（如 gpt-5 不支持 temperature）
 
     @retry(
         stop=stop_after_attempt(3),
