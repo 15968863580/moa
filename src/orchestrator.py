@@ -51,7 +51,7 @@ class MOAOrchestrator:
             "stop": request.stop,
         }
 
-        # 预加载工具定义（reference 与 aggregator 共用同一套工具）
+        # 预加载工具定义（仅 aggregator 使用；reference 不带工具）
         allowed_tools = tool_executor.load_definitions(
             request.tools,
             skill_dir=preset.skill_dir,
@@ -61,10 +61,13 @@ class MOAOrchestrator:
         tools_param = tool_executor.build_tool_schemas(allowed_tools)
         tools_for_call = tools_param if tools_param else None
 
+        # 为 reference 构造简化对话：去掉 system 与工具历史，降低成本并避免严格服务商拒绝
+        reference_messages = self._build_reference_messages(messages)
+
         reference_tasks = [
             self._call_reference_model(
-                ref_config, messages, request_id, i,
-                tools_for_call, request.tool_choice, **sampling_params
+                ref_config, reference_messages, request_id, i,
+                None, None, **sampling_params
             )
             for i, ref_config in enumerate(preset.references)
         ]
@@ -162,7 +165,7 @@ class MOAOrchestrator:
             "stop": request.stop,
         }
 
-        # 预加载工具定义
+        # 预加载工具定义（仅 aggregator 使用；reference 不带工具）
         allowed_tools = tool_executor.load_definitions(
             request.tools,
             skill_dir=preset.skill_dir,
@@ -172,10 +175,13 @@ class MOAOrchestrator:
         tools_param = tool_executor.build_tool_schemas(allowed_tools)
         tools_for_call = tools_param if tools_param else None
 
+        # 为 reference 构造简化对话：去掉 system 与工具历史
+        reference_messages = self._build_reference_messages(messages)
+
         reference_tasks = [
             self._call_reference_model(
-                ref_config, messages, request_id, i,
-                tools_for_call, request.tool_choice, **sampling_params
+                ref_config, reference_messages, request_id, i,
+                None, None, **sampling_params
             )
             for i, ref_config in enumerate(preset.references)
         ]
@@ -322,20 +328,46 @@ class MOAOrchestrator:
             f"【回答 {i+1}】\n{resp}"
             for i, resp in enumerate(reference_responses)
         ])
-        system_prompt = template.format(reference_responses=formatted_responses)
+        # 聚合指令 + reference 响应，追加到最后一条 user 消息末尾，
+        # 保持前缀上下文稳定以命中 prompt cache（对齐 Hermes MoA 设计）
+        aggregator_instruction = template.format(reference_responses=formatted_responses)
 
-        aggregator_messages = [
-            {"role": "system", "content": system_prompt}
-        ]
+        aggregator_messages = [dict(msg) for msg in original_messages]
 
-        for msg in original_messages:
-            if msg["role"] != "system":
-                aggregator_messages.append({
-                    "role": msg["role"],
-                    "content": msg["content"]
-                })
+        appended = False
+        for i in range(len(aggregator_messages) - 1, -1, -1):
+            if aggregator_messages[i]["role"] == "user":
+                aggregator_messages[i]["content"] = (
+                    (aggregator_messages[i].get("content") or "") + "\n\n" + aggregator_instruction
+                )
+                appended = True
+                break
+
+        if not appended:
+            aggregator_messages.append({"role": "user", "content": aggregator_instruction})
 
         return aggregator_messages
+
+    def _build_reference_messages(
+        self,
+        messages: List[Dict[str, Any]]
+    ) -> List[Dict[str, str]]:
+        """为 reference 模型构造简化对话：去掉 system 与工具历史。
+
+        对齐 Hermes MoA 设计——reference 仅做纯文本回答，不接收 system
+        prompt 与工具调用历史，以降低成本并避免严格服务商因工具上下文拒绝。
+        """
+        simplified: List[Dict[str, str]] = []
+        for msg in messages:
+            role = msg["role"]
+            if role == "system":
+                continue
+            if role == "tool":
+                continue
+            if role == "assistant" and msg.get("tool_calls"):
+                continue
+            simplified.append({"role": role, "content": msg.get("content", "")})
+        return simplified
 
     def _message_to_dict(self, msg: ChatMessage) -> Dict[str, Any]:
         data: Dict[str, Any] = {

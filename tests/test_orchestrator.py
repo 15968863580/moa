@@ -254,12 +254,37 @@ def test_build_aggregator_prompt(orchestrator):
         template
     )
 
-    assert result[0]["role"] == "system"
-    assert "回答1：晴天" in result[0]["content"]
-    assert "回答2：多云" in result[0]["content"]
-    assert len(result) == 4
-    assert result[1]["role"] == "user"
-    assert result[1]["content"] == "你好"
+    # 保持原始消息结构（不插入新 system 消息，以命中 prompt cache）
+    assert len(result) == 3
+    assert result[0]["role"] == "user"
+    assert result[0]["content"] == "你好"
+    # reference 响应追加到最后一条 user 消息末尾
+    last_msg = result[-1]
+    assert last_msg["role"] == "user"
+    assert "天气怎么样？" in last_msg["content"]
+    assert "回答1：晴天" in last_msg["content"]
+    assert "回答2：多云" in last_msg["content"]
+    assert "汇总以下回答" in last_msg["content"]
+
+
+def test_build_reference_messages_strips_system_and_tools(orchestrator):
+    messages = [
+        {"role": "system", "content": "你是助手"},
+        {"role": "user", "content": "帮我查天气"},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "function": {"name": "web_search", "arguments": "{}"}}]},
+        {"role": "tool", "content": "晴天 25度", "tool_call_id": "c1", "name": "web_search"},
+        {"role": "assistant", "content": "今天晴天 25度"},
+        {"role": "user", "content": "明天呢？"},
+    ]
+
+    simplified = orchestrator._build_reference_messages(messages)
+
+    roles = [m["role"] for m in simplified]
+    assert "system" not in roles
+    assert "tool" not in roles
+    assert roles == ["user", "assistant", "user"]
+    assert simplified[0]["content"] == "帮我查天气"
+    assert simplified[-1]["content"] == "明天呢？"
 
 
 def test_message_to_dict_preserves_tool_calls(orchestrator):
